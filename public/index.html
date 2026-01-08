@@ -1,518 +1,169 @@
 <script>
-    // ========== КОНФИГУРАЦИЯ API ==========
-    // Используем относительные пути для Vercel
-    const SD_API = '/api/sd-proxy';
-    const LLM_API = '/api/llm-proxy';
-    const HEALTH_API = '/api/health';
+    // ========== КОНФИГУРАЦИЯ ==========
+    const API_BASE = window.location.origin;
+    const SD_API = `${API_BASE}/api/sd-proxy`;
+    const LLM_API = `${API_BASE}/api/llm-proxy`;
+    const HEALTH_API = `${API_BASE}/api/health`;
     
-    console.log('Конфигурация API:', { SD_API, LLM_API, HEALTH_API });
-    console.log('Текущий URL:', window.location.href);
-
-    // ========== ПЕРЕМЕННЫЕ ИГРЫ ==========
-    let game = null;
-    let sceneImage = null;
-    let currentImageKey = 'generated';
-    let isGenerating = false;
-    let battleAnimationActive = false;
-
-    // Состояние игры
-    const gameState = {
-        history: [],
-        inventory: [
-            'Зелье здоровья (+30 HP)',
-            'Магический свиток',
-            'Ключ от старого храма',
-            'Карта снов'
-        ],
-        player: {
-            hp: 100,
-            maxHp: 100,
-            attack: 10,
-            defense: 5,
-            level: 1,
-            exp: 0,
-            gold: 50,
-            mana: 50,
-            maxMana: 50
-        },
-        currentBattle: null,
-        quests: {
-            main: {
-                title: "Пробудить Хранителя Снов",
-                objectives: [
-                    { id: 1, text: "Найти Красный Кристалл в Огненных Пещерах", done: false, keyword: "красный кристалл" },
-                    { id: 2, text: "Найти Синий Кристалл в Затопленном Храме", done: false, keyword: "синий кристалл" },
-                    { id: 3, text: "Найти Зелёный Кристалл в Лесу Духов", done: false, keyword: "зеленый кристалл" },
-                    { id: 4, text: "Провести ритуал пробуждения в Запретной Башне", done: false, keyword: "ритуал" }
-                ],
-                completed: false
-            },
-            side: [
-                { id: 101, title: "Помочь потерянному духу", completed: false },
-                { id: 102, title: "Собрать 5 магических грибов", completed: false }
-            ]
-        },
-        discoveredLocations: ['Лес Снов'],
-        achievements: []
-    };
+    console.log('API Configuration:', {
+        API_BASE,
+        SD_API,
+        LLM_API,
+        HEALTH_API,
+        location: window.location.href
+    });
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     document.addEventListener('DOMContentLoaded', async () => {
-        console.log('AI Dream Weaver инициализируется...');
+        console.log('AI Dream Weaver initializing...');
         
-        // Проверяем, что мы на правильном URL
-        if (window.location.hostname.includes('vercel.app')) {
-            console.log('Запущено на Vercel');
-        } else if (window.location.hostname.includes('localhost')) {
-            console.log('Запущено локально');
-        }
-        
-        // Инициализация Telegram Web App
-        if (window.Telegram && window.Telegram.WebApp) {
-            try {
-                Telegram.WebApp.ready();
-                Telegram.WebApp.expand();
-                Telegram.WebApp.enableClosingConfirmation();
-                
-                console.log('Telegram Web App инициализирован');
-                
-                // Добавляем информацию о пользователе в историю
-                const user = Telegram.WebApp.initDataUnsafe?.user;
-                if (user) {
-                    gameState.player.name = user.first_name || 'Путешественник';
-                    addStoryText(`<span style="color:#8a2fff">✨ Добро пожаловать, ${gameState.player.name}!</span>`);
-                }
-            } catch (error) {
-                console.log('Telegram Web App не доступен:', error);
-            }
-        }
-
-        // Загрузка сохранения
-        loadGame();
-
-        // Инициализация Phaser
-        initializePhaser();
-
-        // Настройка обработчиков событий
-        setupEventListeners();
-
-        // Обновление UI
-        updateUI();
-
         // Проверка API
-        await testAllEndpoints();
-
-        // Скрываем загрузчик
+        await testAPI();
+        
+        // Скрываем лоадер
         setTimeout(() => {
-            document.getElementById('loader').style.opacity = '0';
-            setTimeout(() => {
-                document.getElementById('loader').style.display = 'none';
-                showNotification('🌌 Мир снов готов! Начните свое приключение...');
-            }, 500);
-        }, 1500);
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    showNotification('🚀 Игра готова! Начните приключение.');
+                }, 500);
+            }
+        }, 1000);
+        
+        // Фокус на input
+        const input = document.getElementById('user-input');
+        if (input) {
+            setTimeout(() => input.focus(), 200);
+        }
     });
 
-    // ========== ТЕСТИРОВАНИЕ API ==========
-    async function testAllEndpoints() {
-        console.log('Тестирование API endpoints...');
-        
+    // ========== API ТЕСТИРОВАНИЕ ==========
+    async function testAPI() {
         try {
-            // Тест 1: Health endpoint
-            console.log('Тест 1: Проверка /api/health');
-            const healthResponse = await fetch(HEALTH_API);
-            const healthData = await healthResponse.json();
-            console.log('Health API ответ:', healthData);
+            console.log('Testing API endpoints...');
             
-            if (healthResponse.ok) {
-                showNotification('✅ API подключено!');
-            } else {
-                showNotification('⚠️ Health API недоступно');
-            }
+            // Test Health
+            const healthRes = await fetch(HEALTH_API);
+            console.log('Health API:', healthRes.status, await healthRes.json());
             
-            // Тест 2: LLM endpoint
-            console.log('Тест 2: Проверка /api/llm-proxy');
-            try {
-                const llmResponse = await fetch(LLM_API, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: 'test',
-                        messages: [{ role: 'user', content: 'Привет' }]
-                    })
-                });
-                
-                if (llmResponse.ok) {
-                    console.log('LLM API работает');
-                } else {
-                    console.warn('LLM API ошибка:', llmResponse.status);
-                }
-            } catch (llmError) {
-                console.warn('LLM API тест не удался:', llmError.message);
-            }
+            // Test SD API
+            const sdRes = await fetch(SD_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: 'test' })
+            });
+            console.log('SD API:', sdRes.status);
             
-            // Тест 3: SD endpoint
-            console.log('Тест 3: Проверка /api/sd-proxy');
-            try {
-                const sdResponse = await fetch(SD_API, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: 'test image'
-                    })
-                });
-                
-                if (sdResponse.ok) {
-                    console.log('SD API работает');
-                } else {
-                    console.warn('SD API ошибка:', sdResponse.status);
-                }
-            } catch (sdError) {
-                console.warn('SD API тест не удался:', sdError.message);
-            }
+            // Test LLM API
+            const llmRes = await fetch(LLM_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: 'test',
+                    messages: [{ role: 'user', content: 'Hello' }]
+                })
+            });
+            console.log('LLM API:', llmRes.status);
             
         } catch (error) {
-            console.error('Ошибка тестирования API:', error);
-            showNotification('❌ Ошибка подключения к API');
-            
-            // Добавляем информацию об ошибке в историю
-            addStoryText(`<span style="color:#ffaa00">
-                ⚠️ <b>Внимание:</b> API временно недоступно.<br>
-                Игра работает в локальном режиме.<br>
-                Проблема: ${error.message}
-            </span>`);
+            console.warn('API test failed:', error);
+            showNotification('⚠️ Некоторые API недоступны');
         }
     }
 
-    // ========== ИНИЦИАЛИЗАЦИЯ PHASER ==========
-    function initializePhaser() {
-        const config = {
-            type: Phaser.AUTO,
-            parent: 'game-container',
-            width: window.innerWidth,
-            height: window.innerHeight,
-            scene: {
-                preload: preload,
-                create: create,
-                update: update
-            },
-            scale: {
-                mode: Phaser.Scale.RESIZE,
-                autoCenter: Phaser.Scale.CENTER_BOTH
-            },
-            transparent: true,
-            backgroundColor: '#0a0a1a'
-        };
-
-        game = new Phaser.Game(config);
-    }
-
-    function preload() {
-        console.log('Phaser: Preload');
-        
-        // Загружаем placeholder изображение
-        const placeholder = `
-            <svg width="512" height="384" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color:#0a0a1a;stop-opacity:1" />
-                        <stop offset="100%" style="stop-color:#1a1a2e;stop-opacity:1" />
-                    </linearGradient>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grad1)"/>
-                <text x="256" y="192" font-family="Arial" font-size="24" fill="#ffffff" text-anchor="middle" opacity="0.5">
-                    AI Dream Weaver
-                </text>
-            </svg>
-        `;
-        
-        const placeholderURL = 'data:image/svg+xml;base64,' + btoa(placeholder);
-        this.load.image('placeholder', placeholderURL);
-    }
-
-    function create() {
-        console.log('Phaser: Create');
-        
-        // Создаем изображение-заглушку
-        sceneImage = this.add.image(
-            this.scale.width / 2,
-            this.scale.height / 2,
-            'placeholder'
-        ).setScale(0.7).setAlpha(0.3);
-
-        // Фокус на input
-        setTimeout(() => {
-            const input = document.getElementById('user-input');
-            if (input) input.focus();
-        }, 100);
-    }
-
-    function update() {
-        // Анимации или обновления в реальном времени
-    }
-
-    // ========== ОБРАБОТЧИКИ СОБЫТИЙ ==========
-    function setupEventListeners() {
-        // Кнопка действия
-        const actionBtn = document.getElementById('action-btn');
-        const userInput = document.getElementById('user-input');
-        
-        if (actionBtn) {
-            actionBtn.addEventListener('click', handleUserAction);
-        }
-        
-        if (userInput) {
-            userInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleUserAction();
-                }
-            });
-        }
-
-        // Кнопки боя
-        document.getElementById('btn-attack')?.addEventListener('click', () => handleBattle('attack'));
-        document.getElementById('btn-item')?.addEventListener('click', () => handleBattle('item'));
-        document.getElementById('btn-flee')?.addEventListener('click', () => handleBattle('flee'));
-
-        // Кнопки панелей
-        document.getElementById('toggle-inventory')?.addEventListener('click', () => togglePanel('inventory-panel'));
-        document.getElementById('toggle-quests')?.addEventListener('click', () => togglePanel('quest-panel'));
-
-        // Сохранение при закрытии
-        window.addEventListener('beforeunload', saveGame);
-    }
-
-    // ========== ОСНОВНАЯ ЛОГИКА ИГРЫ ==========
+    // ========== ОСНОВНЫЕ ФУНКЦИИ ==========
     async function handleUserAction() {
-        if (isGenerating) return;
-
         const input = document.getElementById('user-input');
         const btn = document.getElementById('action-btn');
-        const userText = input?.value.trim();
-
-        if (!userText) {
+        const text = input?.value.trim();
+        
+        if (!text) {
             showNotification('✏️ Введите действие!');
             return;
         }
-
-        // Блокируем кнопку
+        
         if (btn) btn.disabled = true;
-        isGenerating = true;
-
-        // Добавляем действие игрока в историю
-        addStoryText(`<i style="color:#88ff88">👤 Вы: "${userText}"</i>`);
-
-        // Очистка старых кнопок выбора
-        clearChoiceButtons();
-
+        addStoryText(`<i>Вы: "${text}"</i>`);
+        
         try {
-            // Пробуем использовать API
-            const story = await askLLM(userText);
-            gameState.history.push(story);
+            // Получаем ответ от LLM
+            const story = await askLLM(text);
             addStoryText(story);
             
-            // Добавляем кнопки выбора
-            addChoiceButtons(story);
-            
-            // Пробуем сгенерировать изображение
-            setTimeout(() => {
-                generateImageForStory(userText).catch(() => {
-                    console.log('Изображение не сгенерировано');
-                });
+            // Генерируем изображение
+            setTimeout(async () => {
+                try {
+                    await generateImage(text);
+                } catch (error) {
+                    console.warn('Image generation failed:', error);
+                }
             }, 500);
             
         } catch (error) {
-            console.error('Ошибка обработки действия:', error);
-            
-            // Fallback логика
-            const fallbackResponses = [
-                `Вы "${userText.toLowerCase()}" в мире снов. Что будете делать дальше?`,
-                `"${userText}" - интересный выбор. Продолжайте ваше путешествие.`,
-                `Мир снов откликается на ваше действие "${userText.substring(0, 30)}..."`
-            ];
-            
-            const randomResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-            addStoryText(randomResponse);
-            
-            // Стандартные кнопки выбора
-            addChoiceButtons("1. Исследовать дальше\n2. Осмотреться вокруг\n3. Проверить инвентарь\n4. Искать подсказки");
-            
-            showNotification('⚠️ Используем локальную логику');
-            
+            console.error('Action failed:', error);
+            addStoryText(`Ошибка: ${error.message}. Попробуйте еще раз.`);
         } finally {
-            // Разблокируем кнопку
             if (btn) btn.disabled = false;
-            isGenerating = false;
             if (input) {
                 input.value = '';
                 input.focus();
             }
-            
-            saveGame();
-            updateUI();
         }
     }
 
-    async function askLLM(userAction) {
-        try {
-            const response = await fetch(LLM_API, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    model: 'local-model',
-                    messages: [
-                        {
-                            role: 'system',
-                            content: 'Ты мастер повествования в фэнтези-мире снов. Отвечай кратко, атмосферно и предлагай варианты действий.'
-                        },
-                        {
-                            role: 'user',
-                            content: `Игрок в фэнтези-мире снов. Действие: "${userAction}". Опиши что происходит (2 предложения) и предложи 3 варианта действий (пронумеруй 1. 2. 3.).`
-                        }
-                    ]
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`LLM API error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            return data.choices?.[0]?.message?.content || 'Нет ответа от нейросети.';
-
-        } catch (error) {
-            console.error('Ошибка запроса к LLM:', error);
-            throw error;
-        }
-    }
-
-    async function generateImageForStory(prompt) {
-        if (isGenerating) return;
+    async function askLLM(prompt) {
+        const response = await fetch(LLM_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'local-model',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.7,
+                max_tokens: 300
+            })
+        });
         
-        isGenerating = true;
+        if (!response.ok) {
+            throw new Error(`LLM API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data.choices[0].message.content;
+    }
+
+    async function generateImage(prompt) {
         showNotification('🎨 Генерация изображения...');
-
-        try {
-            const response = await fetch(SD_API, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({
-                    prompt: prompt + ", fantasy art, dream world, magical",
-                    steps: 20,
-                    width: 512,
-                    height: 384
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`SD API error: ${response.status}`);
-            }
-
-            const data = await response.json();
-            
-            // Создаем fallback изображение
-            createFallbackImage(prompt);
-            
-            showNotification('✅ Изображение готово!');
-
-        } catch (error) {
-            console.error('Ошибка генерации изображения:', error);
-            createFallbackImage(prompt);
-        } finally {
-            isGenerating = false;
+        
+        const response = await fetch(SD_API, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                prompt: prompt + ", fantasy art, dream world",
+                steps: 20,
+                width: 512,
+                height: 384
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`SD API error: ${response.status}`);
         }
-    }
-
-    function createFallbackImage(prompt) {
-        if (!game || !game.scene || !game.scene.scenes[0]) return;
         
-        const scene = game.scene.scenes[0];
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 384;
-        const ctx = canvas.getContext('2d');
+        const data = await response.json();
+        showNotification('✅ Изображение готово!');
         
-        // Градиентный фон
-        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-        gradient.addColorStop(0, '#0a0a1a');
-        gradient.addColorStop(1, '#1a1a2e');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Текст
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-        ctx.font = 'bold 30px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('AI Dream Weaver', canvas.width / 2, canvas.height / 2);
-        
-        ctx.fillStyle = 'rgba(138, 47, 255, 0.3)';
-        ctx.font = '16px Arial';
-        ctx.fillText(prompt.substring(0, 50), canvas.width / 2, canvas.height / 2 + 40);
-        
-        // Создаем изображение из canvas
-        const img = new Image();
-        img.onload = () => {
-            if (scene.textures.exists('fallback')) {
-                scene.textures.get('fallback').setSource(img);
-            } else {
-                scene.textures.addImage('fallback', img);
-            }
-            
-            if (sceneImage) {
-                sceneImage.setTexture('fallback');
-                sceneImage.setAlpha(0.7);
-            }
-        };
-        img.src = canvas.toDataURL();
+        // Здесь можно обновить изображение в Phaser
+        console.log('Image generated:', data);
     }
 
     // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
-    function togglePanel(panelId) {
-        const panel = document.getElementById(panelId);
-        if (!panel) return;
-        
-        panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
-    }
-
     function addStoryText(text) {
         const panel = document.getElementById('story-text');
         if (panel) {
             panel.innerHTML += '<br><br>' + text;
             panel.scrollTop = panel.scrollHeight;
-        }
-    }
-
-    function clearChoiceButtons() {
-        document.querySelectorAll('.choice-btn').forEach(btn => btn.remove());
-    }
-
-    function addChoiceButtons(storyText) {
-        clearChoiceButtons();
-        
-        const choices = storyText.match(/\d\.\s+([^\n]+)/g);
-        if (choices && choices.length > 0) {
-            choices.forEach((choice, idx) => {
-                const btn = document.createElement('button');
-                btn.className = 'choice-btn';
-                btn.textContent = choice.replace(/^\d\.\s+/, '').trim();
-                
-                btn.onclick = () => {
-                    const input = document.getElementById('user-input');
-                    if (input) {
-                        input.value = btn.textContent;
-                        handleUserAction();
-                    }
-                };
-                
-                document.body.appendChild(btn);
-            });
         }
     }
 
@@ -528,69 +179,11 @@
         }, duration);
     }
 
-    function updateUI() {
-        // Обновление HP
-        const hpPercent = (gameState.player.hp / gameState.player.maxHp) * 100;
-        const hpFill = document.getElementById('player-hp-fill');
-        if (hpFill) {
-            hpFill.style.width = hpPercent + '%';
-            hpFill.className = hpPercent < 30 ? 'hp-fill danger' : 'hp-fill';
-            hpFill.querySelector('.hp-text').textContent = `${Math.round(hpPercent)}%`;
-        }
-        
-        document.getElementById('hp-value').textContent = `${gameState.player.hp}/${gameState.player.maxHp}`;
-        
-        // Обновление статов
-        document.getElementById('player-level').textContent = gameState.player.level;
-        document.getElementById('player-attack').textContent = gameState.player.attack;
-        document.getElementById('player-defense').textContent = gameState.player.defense;
-        document.getElementById('player-exp').textContent = gameState.player.exp;
-        
-        // Обновление инвентаря
-        const invList = document.getElementById('inventory-list');
-        if (invList) {
-            invList.innerHTML = gameState.inventory.map(item => 
-                `<li>${item}</li>`
-            ).join('');
-        }
-    }
-
-    function saveGame() {
-        try {
-            localStorage.setItem('dreamWeaverSave', JSON.stringify(gameState));
-            console.log('Игра сохранена');
-        } catch (error) {
-            console.warn('Ошибка сохранения:', error);
-        }
-    }
-
-    function loadGame() {
-        try {
-            const saved = localStorage.getItem('dreamWeaverSave');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                Object.assign(gameState, parsed);
-                console.log('Сохранение загружено');
-            }
-        } catch (error) {
-            console.warn('Ошибка загрузки сохранения:', error);
-        }
-    }
-
-    // ========== СИСТЕМА БОЯ (упрощенная) ==========
-    async function handleBattle(action) {
-        // Упрощенная логика боя
-        showNotification(`⚔️ Бой: ${action}`);
-    }
-
     // ========== ГЛОБАЛЬНЫЙ ДОСТУП ==========
     window.AIDreamWeaver = {
-        gameState,
-        saveGame,
-        loadGame,
-        showNotification,
-        testAllEndpoints
+        testAPI,
+        handleUserAction,
+        showNotification
     };
-
-    console.log('AI Dream Weaver инициализирован');
 </script>
+
