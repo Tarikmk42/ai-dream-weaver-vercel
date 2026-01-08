@@ -1,9 +1,8 @@
 export default async function handler(req, res) {
-  // Включаем CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   
   if (req.method === 'OPTIONS') {
     res.status(200).end();
@@ -16,70 +15,96 @@ export default async function handler(req, res) {
   
   try {
     const { messages, model = 'local-model' } = req.body || {};
+    const lastMessage = messages?.[messages.length - 1]?.content || '';
     
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ 
-        error: 'Messages array is required',
-        usage: {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: {
-            model: 'local-model',
-            messages: [{ role: 'user', content: 'Hello' }],
-            temperature: 0.7,
-            max_tokens: 500
+    console.log('LLM Proxy:', lastMessage.substring(0, 100));
+    
+    // Проверяем наличие API ключей
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+    const LLM_API_URL = process.env.LLM_API_URL;
+    
+    // Используем OpenAI если есть ключ
+    if (OPENAI_API_KEY) {
+      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 500
+        })
+      });
+      
+      if (!openaiResponse.ok) throw new Error(`OpenAI error: ${openaiResponse.status}`);
+      
+      const data = await openaiResponse.json();
+      return res.status(200).json(data);
+    }
+    // Или используем локальный LM Studio
+    else if (LLM_API_URL) {
+      const lmResponse = await fetch(`${LLM_API_URL}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: model,
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 500
+        })
+      });
+      
+      if (!lmResponse.ok) throw new Error(`LM Studio error: ${lmResponse.status}`);
+      
+      const data = await lmResponse.json();
+      return res.status(200).json(data);
+    }
+    // Fallback: генерация ответа
+    else {
+      const response = generateStoryResponse(lastMessage);
+      
+      return res.status(200).json({
+        choices: [{
+          message: {
+            content: response,
+            role: 'assistant'
           }
-        }
+        }],
+        usage: {
+          prompt_tokens: lastMessage.length,
+          completion_tokens: response.length,
+          total_tokens: lastMessage.length + response.length
+        },
+        note: "Mock response - configure OPENAI_API_KEY or LLM_API_URL in Vercel"
       });
     }
-    
-    const lastMessage = messages[messages.length - 1]?.content || '';
-    console.log('LLM Proxy: Processing request for:', lastMessage.substring(0, 100));
-    
-    // Генерируем интеллектуальный ответ на основе промпта
-    const response = generateStoryResponse(lastMessage);
-    
-    return res.status(200).json({
-      choices: [{
-        message: {
-          content: response,
-          role: 'assistant'
-        }
-      }],
-      usage: {
-        prompt_tokens: lastMessage.length,
-        completion_tokens: response.length,
-        total_tokens: lastMessage.length + response.length
-      },
-      model: model,
-      note: "This is a mock response. Configure your LLM API in environment variables."
-    });
     
   } catch (error) {
     console.error('LLM Proxy error:', error);
     return res.status(500).json({ 
       error: 'Internal server error',
-      message: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      message: error.message 
     });
   }
 }
 
-// Функция для генерации story response
 function generateStoryResponse(prompt) {
-  const prompts = [
-    "Вы в мире снов, полном тайн и магии. ",
-    "Вокруг вас плывут образы из забытых снов. ",
+  const storyParts = [
+    "Вы находитесь в загадочном мире снов. ",
+    "Вокруг вас плывут образы из забытых воспоминаний. ",
     "Воздух наполнен магической энергией. ",
-    "Вы чувствуете древнюю силу этого места. ",
-    "Перед вами открывается вид на фантастический пейзаж. "
+    "Перед вами открывается вид на фантастический пейзаж. ",
+    "Вы чувствуете древнюю силу этого места. "
   ];
   
-  const actions = [
+  const questions = [
     "Что вы хотите сделать?",
     "Как вы поступите?",
     "Каковы ваши дальнейшие действия?",
-    "Что будете исследовать?"
+    "Что будете исследовать первым делом?"
   ];
   
   const options = [
@@ -88,22 +113,17 @@ function generateStoryResponse(prompt) {
     "3. Искать подсказки на земле",
     "4. Прислушаться к голосам ветра",
     "5. Проверить свой инвентарь",
-    "6. Искать магические артефакты"
+    "6. Искать магические артефакты",
+    "7. Найти источник воды",
+    "8. Разжечь костер для отдыха"
   ];
   
-  const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-  const randomAction = actions[Math.floor(Math.random() * actions.length)];
+  const story = storyParts[Math.floor(Math.random() * storyParts.length)];
+  const question = questions[Math.floor(Math.random() * questions.length)];
   
-  // Выбираем 3 случайные опции
-  const selectedOptions = [];
-  const availableOptions = [...options];
-  for (let i = 0; i < 3; i++) {
-    if (availableOptions.length > 0) {
-      const randomIndex = Math.floor(Math.random() * availableOptions.length);
-      selectedOptions.push(availableOptions[randomIndex]);
-      availableOptions.splice(randomIndex, 1);
-    }
-  }
+  // Выбираем 3 уникальные опции
+  const shuffled = [...options].sort(() => 0.5 - Math.random());
+  const selected = shuffled.slice(0, 4);
   
-  return `${randomPrompt}Вы сказали: "${prompt.substring(0, 50)}". ${randomAction}\n\n${selectedOptions.join('\n')}`;
+  return `${story}Вы сказали: "${prompt.substring(0, 80)}". ${question}\n\n${selected.join('\n')}`;
 }
