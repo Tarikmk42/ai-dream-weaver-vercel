@@ -1,13 +1,13 @@
-import fetch from 'node-fetch';
-
 export default async function handler(req, res) {
-  // CORS headers
+  // Включаем CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
   
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
   
   if (req.method !== 'POST') {
@@ -15,24 +15,14 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { messages } = req.body;
-    
-    if (!messages || !Array.isArray(messages)) {
-      return res.status(400).json({ error: 'Messages array is required' });
-    }
-    
-    const lastMessage = messages[messages.length - 1]?.content || '';
-    
-    // Простой fallback ответ
-    const fallbackResponse = {
+    // Тестовый ответ
+    return res.status(200).json({
       choices: [{
         message: {
-          content: `Вы сказали: "${lastMessage.substring(0, 50)}...". В мире снов вы видите таинственные образы. Что вы хотите сделать? 1. Исследовать дальше 2. Осмотреться вокруг 3. Искать подсказки`
+          content: "Это тестовый ответ от LLM прокси. В реальной версии здесь будет ответ от нейросети.\n\nЧто вы можете сделать:\n1. Исследовать лес\n2. Проверить инвентарь\n3. Искать подсказки"
         }
       }]
-    };
-    
-    return res.status(200).json(fallbackResponse);
+    });
     
   } catch (error) {
     console.error('LLM Proxy error:', error);
