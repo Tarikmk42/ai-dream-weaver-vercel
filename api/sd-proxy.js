@@ -1,13 +1,13 @@
-import fetch from 'node-fetch';
-
 export default async function handler(req, res) {
-  // CORS headers
+  // Включаем CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
   
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
   
   if (req.method !== 'POST') {
@@ -15,25 +15,15 @@ export default async function handler(req, res) {
   }
   
   try {
-    const { prompt } = req.body;
-    
-    if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
-    }
-    
-    // Здесь будет ваш код для вызова Stable Diffusion API
-    // Например, через Replicate или другой сервис
-    
-    const apiResponse = {
-      images: ["base64_placeholder_image_here"],
+    // Тестовый ответ для проверки
+    return res.status(200).json({
+      images: ["base64_placeholder_image"],
+      info: "Stable Diffusion proxy работает",
       parameters: {
-        prompt: prompt,
+        prompt: "test prompt",
         steps: 20
-      },
-      info: "Image generation via Vercel proxy"
-    };
-    
-    return res.status(200).json(apiResponse);
+      }
+    });
     
   } catch (error) {
     console.error('SD Proxy error:', error);
