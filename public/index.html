@@ -731,15 +731,13 @@
 
     <!-- ========== JavaScript ========== -->
     <script>
-        // ========== КОНФИГУРАЦИЯ ==========
-        // Для Vercel - используем относительные пути
-        const API_BASE = ''; // Оставляем пустым для относительных путей
-        
-        // В Vercel функции находятся по пути /api/*
+        // ========== КОНФИГУРАЦИЯ API ==========
+        // Используем относительные пути для Vercel
         const SD_API = '/api/sd-proxy';
         const LLM_API = '/api/llm-proxy';
+        const HEALTH_API = '/api/health';
         
-        console.log('Конфигурация API:', { SD_API, LLM_API });
+        console.log('Конфигурация API для Vercel:', { SD_API, LLM_API });
 
         // ========== ПЕРЕМЕННЫЕ ИГРЫ ==========
         let game = null;
@@ -934,6 +932,35 @@
             // Анимации или обновления в реальном времени
         }
 
+        // ========== ПРОВЕРКА API ==========
+        async function checkAPIConnection() {
+            try {
+                // Проверяем health endpoint
+                const response = await fetch(HEALTH_API, {
+                    method: 'GET',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('API статус:', data);
+                    showNotification('✅ API подключено');
+                    return true;
+                }
+                
+                console.warn('API недоступно');
+                return false;
+                
+            } catch (error) {
+                console.warn('Проверка API не удалась:', error);
+                showNotification('⚠️ API временно недоступно');
+                return false;
+            }
+        }
+
         // ========== ОБРАБОТЧИКИ СОБЫТИЙ ==========
         function setupEventListeners() {
             // Кнопка действия
@@ -1005,6 +1032,12 @@
 
             // Touch events для мобильных устройств
             document.addEventListener('touchstart', handleTouch, { passive: true });
+            
+            // Фокус на input при загрузке
+            setTimeout(() => {
+                const input = document.getElementById('user-input');
+                if (input) input.focus();
+            }, 1000);
         }
 
         // ========== ОСНОВНАЯ ЛОГИКА ИГРЫ ==========
@@ -1037,12 +1070,14 @@
             try {
                 // Проверка API
                 if (!(await checkAPIConnection())) {
-                    throw new Error('Нейросети временно недоступны. Используйте локальную логику.');
+                    throw new Error('Нейросети временно недоступны. Используем локальную логику.');
                 }
 
                 // Проверка триггеров боя
                 if (await tryTriggerBattle(userText)) {
                     input.value = '';
+                    isGenerating = false;
+                    if (btn) btn.disabled = false;
                     return;
                 }
 
@@ -1094,15 +1129,12 @@
                 
                 addChoiceButtons(standardChoices.join('\n'));
                 
-                showNotification('⚠️ Используется локальная логика');
+                showNotification('⚠️ Используем локальную логику');
 
             } finally {
                 // Разблокируем кнопку
                 if (btn) {
                     btn.disabled = false;
-                    setTimeout(() => {
-                        btn.disabled = false;
-                    }, 1000);
                 }
                 isGenerating = false;
                 if (input) {
@@ -1116,27 +1148,6 @@
         }
 
         // ========== API ФУНКЦИИ ==========
-        async function checkAPIConnection() {
-            try {
-                // Проверяем health endpoint
-                const response = await fetch('/api/health', {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' },
-                    timeout: 5000
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    console.log('API статус:', data);
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                console.warn('Проверка API не удалась:', error);
-                return false;
-            }
-        }
-
         async function askLLM(userAction) {
             try {
                 const prompt = `
@@ -1887,47 +1898,18 @@
             }
         }
 
-        // ========== АВАРИЙНЫЙ РЕЖИМ ==========
-        function enableFallbackMode() {
-            console.log('Включен аварийный режим');
-            
-            // Отключаем кнопку генерации изображений
-            const actionBtn = document.getElementById('action-btn');
-            if (actionBtn) {
-                actionBtn.textContent = '▶️ (Локальный режим)';
-            }
-            
-            showNotification('⚠️ Используется локальная логика');
-        }
-
-        // ========== ЭКСПОРТ ДАННЫХ ==========
-        function exportGameData() {
-            const dataStr = JSON.stringify(gameState, null, 2);
-            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-            
-            const exportFileDefaultName = `dream-weaver-save-${Date.now()}.json`;
-            
-            const linkElement = document.createElement('a');
-            linkElement.setAttribute('href', dataUri);
-            linkElement.setAttribute('download', exportFileDefaultName);
-            linkElement.click();
-            
-            showNotification('💾 Данные экспортированы!');
-        }
-
-        // ========== ГЛОБАЛЬНЫЙ ДОСТУП ==========
+        // ========== ГЛОБАЛЬНЫЙ ДОСТУП (для отладки) ==========
         window.AIDreamWeaver = {
             gameState,
             saveGame,
             loadGame,
-            exportGameData,
             showNotification,
             togglePanel
         };
 
         // ========== КОНЕЦ ИНИЦИАЛИЗАЦИИ ==========
         console.log('AI Dream Weaver готов к работе!');
-        console.log('Игровое состояние:', gameState);
+        console.log('API пути:', { SD_API, LLM_API, HEALTH_API });
     </script>
 </body>
 </html>
