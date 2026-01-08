@@ -2,6 +2,7 @@
   "name": "ai-dream-weaver",
   "version": "1.0.0",
   "description": "AI Dream Weaver Game",
+  "type": "module",
   "scripts": {
     "dev": "vercel dev",
     "deploy": "vercel --prod"
@@ -13,6 +14,6 @@
     "@vercel/node": "^3.0.0"
   },
   "engines": {
-    "node": ">=18"
+    "node": "18.x"
   }
 }
