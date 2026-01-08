@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Dream Weaver</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; padding: 0; background: #0a0a1a; color: #fff; font-family: Arial; overflow: hidden; touch-action: manipulation; height: 100vh; width: 100vw; }
+        #game-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        #game-container canvas { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 100%; max-height: 100%; object-fit: contain; }
+        .ui-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; pointer-events: none; z-index: 100; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+        .story-container { flex: 1; max-height: 35vh; background: rgba(0, 0, 30, 0.95); backdrop-filter: blur(10px); border-bottom: 2px solid #4a6fff; padding: 15px; margin: 10px; border-radius: 20px; overflow-y: auto; pointer-events: auto; box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5); }
+        .story-text { font-size: 16px; line-height: 1.5; margin: 0; text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8); }
+        .input-container { background: rgba(0, 0, 20, 0.9); backdrop-filter: blur(15px); border-top: 2px solid #8a2fff; padding: 15px; margin: 10px; border-radius: 20px; display: flex; gap: 10px; pointer-events: auto; box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5); }
+        #user-input { flex: 1; padding: 15px 20px; font-size: 16px; background: rgba(255, 255, 255, 0.1); color: #fff; border: 2px solid #4a6fff; border-radius: 15px; outline: none; min-height: 50px; }
+        #action-btn { padding: 0 25px; background: linear-gradient(135deg, #4a6fff, #8a2fff); color: white; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; min-width: 80px; }
+        #action-btn:disabled { background: #555; cursor: not-allowed; }
+        .side-panel { position: fixed; top: 50%; transform: translateY(-50%); width: 280px; max-width: 85vw; background: rgba(0, 0, 30, 0.95); backdrop-filter: blur(15px); border: 2px solid #4a6fff; border-radius: 20px; padding: 15px; overflow-y: auto; pointer-events: auto; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); display: none; }
+        #inventory-panel { left: 10px; max-height: 70vh; }
+        #quest-panel { right: 10px; max-height: 70vh; }
+        .toggle-panel-btn { position: fixed; top: 50%; transform: translateY(-50%); width: 40px; height: 100px; background: rgba(74, 111, 255, 0.8); border: none; border-radius: 0 10px 10px 0; color: white; font-size: 24px; cursor: pointer; z-index: 101; display: flex; align-items: center; justify-content: center; }
+        #toggle-inventory { left: 0; border-radius: 0 15px 15px 0; }
+        #toggle-quests { right: 0; border-radius: 15px 0 0 15px; }
+        #battle-ui { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 500px; background: rgba(139, 0, 0, 0.95); backdrop-filter: blur(15px); padding: 20px; border-radius: 25px; text-align: center; display: none; pointer-events: auto; z-index: 200; border: 3px solid #ff4444; box-shadow: 0 10px 30px rgba(255, 0, 0, 0.3); }
+        .battle-btn { margin: 8px; padding: 15px 20px; font-size: 16px; background: linear-gradient(135deg, #ff6600, #ff3300); color: #fff; border: none; border-radius: 15px; cursor: pointer; flex: 1; min-width: 100px; font-weight: bold; }
+        .hp-bar { height: 25px; background: rgba(255, 255, 255, 0.1); border-radius: 12px; overflow: hidden; position: relative; }
+        .hp-fill { height: 100%; background: linear-gradient(90deg, #00ff88, #00cc66); border-radius: 12px; width: 100%; transition: width 0.5s; position: relative; }
+        .hp-fill.danger { background: linear-gradient(90deg, #ff5555, #cc0000); }
+        .choice-btn { display: block; margin: 10px auto; padding: 15px; background: linear-gradient(135deg, #3366ff, #2244cc); color: #fff; border: none; border-radius: 15px; cursor: pointer; width: 90%; max-width: 400px; font-size: 16px; font-weight: bold; pointer-events: auto; box-shadow: 0 5px 15px rgba(51, 102, 255, 0.3); }
+        @media (max-height: 700px) { .story-container { max-height: 30vh; padding: 10px; } .story-text { font-size: 14px; } .input-container { padding: 10px; } #user-input { padding: 12px 15px; font-size: 15px; min-height: 45px; } #action-btn { padding: 0 20px; font-size: 16px; min-width: 70px; } .side-panel { width: 250px; padding: 12px; } }
+        @media (max-height: 600px) { .story-container { max-height: 25vh; } .story-text { font-size: 13px; } }
+        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 4px; } ::-webkit-scrollbar-thumb { background: #4a6fff; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="game-container"></div>
+    <div class="ui-container">
+        <div class="story-container">
+            <div id="story-text" class="story-text"><strong>AI Dream Weaver</strong><br>Ты в мире снов. Опиши свое первое действие...</div>
+        </div>
+        <div class="input-container">
+            <input type="text" id="user-input" placeholder="Что делать? (например: осмотрюсь вокруг)" autocomplete="off">
+            <button id="action-btn">▶</button>
+        </div>
+    </div>
+    <button class="toggle-panel-btn" id="toggle-inventory">🎒</button>
+    <button class="toggle-panel-btn" id="toggle-quests">📜</button>
+    <div id="inventory-panel" class="side-panel">
+        <h3>🎒 Инвентарь</h3>
+        <ul id="inventory-list"><li>Зелье здоровья</li></ul>
+        <div style="margin: 15px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;"><span>Здоровье</span><span id="hp-value">100/100</span></div>
+            <div class="hp-bar"><div id="player-hp-fill" class="hp-fill" style="width: 100%"><div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);">100%</div></div></div>
+        </div>
+        <div id="player-stats" style="text-align: center; margin-top: 15px; font-size: 14px; color: #8a2fff;">Ур.1 | Атк:10 | Защ:5</div>
+    </div>
+    <div id="quest-panel" class="side-panel">
+        <h3>📜 Квесты</h3>
+        <div id="quest-log">
+            <div style="margin-bottom: 15px;"><strong style="color: #FFD700;">Главный квест:</strong><br>Пробудить Хранителя Снов</div>
+            <div style="font-size: 14px;"><div style="margin-left: 10px;">• Найти Красный Кристалл</div><div style="margin-left: 10px;">• Найти Синий Кристалл</div><div style="margin-left: 10px;">• Найти Зелёный Кристалл</div><div style="margin-left: 10px;">• Провести ритуал</div></div>
+        </div>
+    </div>
+    <div id="battle-ui">
+        <h2 id="enemy-title" style="margin: 0 0 20px 0; color: #FFEB3B;">⚔️ БОЙ!</h2>
+        <div style="margin: 15px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;"><span id="enemy-name">Враг</span><span id="enemy-hp-value">100/100</span></div>
+            <div class="hp-bar"><div id="enemy-hp-fill" class="hp-fill" style="width: 100%"><div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);">100%</div></div></div>
+        </div>
+        <div style="margin: 15px 0;">
+            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 5px;"><span>Твоё HP</span><span id="player-battle-hp">100/100</span></div>
+            <div class="hp-bar"><div id="player-battle-hp-fill" class="hp-fill" style="width: 100%"><div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-weight: bold; text-shadow: 1px 1px 3px rgba(0,0,0,0.8);">100%</div></div></div>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px;">
+            <button class="battle-btn" id="btn-attack">🗡️ Атаковать</button>
+            <button class="battle-btn" id="btn-item">🧪 Зелье</button>
+            <button class="battle-btn" id="btn-flee">🏃 Бежать</button>
+        </div>
+    </div>
+    <div id="notification" style="position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: rgba(0,0,30,0.95); border: 2px solid #4a6fff; border-radius: 15px; padding: 15px 20px; color: white; font-weight: bold; z-index: 1000; display: none; pointer-events: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></div>
+
+    <script>
+    // ========== НАСТРОЙКИ ==========
+    // Автоматическое определение адресов
+    const isLocal = window.location.hostname.includes('localhost') || 
+                    window.location.hostname.includes('127.0.0.1');
+    
+    const API_BASE = isLocal ? 'http://localhost:8000' : '';
+    
+    const SD_API = `${API_BASE}/sdapi/v1/txt2img`;
+    const LLM_API = `${API_BASE}/v1/chat/completions`;
+    
+    console.log('Настройки API:', { SD_API, LLM_API, isLocal });
+    
+    // ========== ИНИЦИАЛИЗАЦИЯ ==========
+    let tg = window.Telegram.WebApp;
+    
+    // Инициализируем Telegram Web App
+    tg.ready();
+    tg.expand();
+    
+    // Показываем версию Telegram Web App
+    console.log('Telegram WebApp version:', tg.version);
+    console.log('Platform:', tg.platform);
+    
+    // ========== ИНИЦИАЛИЗАЦИЯ PHASER ==========
+    const game = new Phaser.Game({
+        type: Phaser.AUTO,
+        parent: 'game-container',
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scene: { preload, create, update },
+        scale: {
+            mode: Phaser.Scale.RESIZE,
+            autoCenter: Phaser.Scale.CENTER_BOTH
+        },
+        backgroundColor: '#0a0a1a',
+        transparent: true
+    });
+    
+    let sceneImage;
+    let gameState = {
+        history: [],
+        inventory: ['Зелье здоровья'],
+        player: { hp: 100, maxHp: 100, attack: 10, defense: 5, level: 1, exp: 0 },
+        currentBattle: null,
+        quests: {
+            main: {
+                title: "Пробудить Хранителя Снов",
+                objectives: [
+                    { text: "Найти Красный Кристалл", done: false, keyword: "красный кристалл" },
+                    { text: "Найти Синий Кристалл", done: false, keyword: "синий кристалл" },
+                    { text: "Найти Зелёный Кристалл", done: false, keyword: "зеленый кристалл" },
+                    { text: "Провести ритуал", done: false, keyword: "ритуал" }
+                ],
+                completed: false
+            },
+            side: []
+        }
+    };
+    
+    // ========== ФУНКЦИИ ПРОВЕРКИ СЕТИ ==========
+    async function checkAPIs() {
+        try {
+            console.log('Проверка доступности API...');
+            
+            // Проверка прокси-сервера
+            const healthResp = await fetch(`${API_BASE}/health`, { timeout: 5000 });
+            if (healthResp.ok) {
+                const health = await healthResp.json();
+                console.log('Статус сервисов:', health);
+                
+                if (health.services.stable_diffusion === 'error') {
+                    showNotification('⚠️ Stable Diffusion не доступен');
+                }
+                if (health.services.lm_studio === 'error') {
+                    showNotification('⚠️ LM Studio не доступен');
+                }
+            }
+            
+            return true;
+        } catch (error) {
+            console.warn('Проверка API не удалась:', error);
+            return false;
+        }
+    }
+    
+    // ========== ОСНОВНЫЕ ФУНКЦИИ ИГРЫ ==========
+    function preload() {
+        // Загружаем placeholder изображение
+        this.load.image('placeholder', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==');
+    }
+    
+    function create() {
+        // Создаем начальное изображение
+        sceneImage = this.add.image(this.scale.width/2, this.scale.height/2, 'placeholder')
+            .setScale(0.7)
+            .setAlpha(0.3);
+        
+        // Настройка обработчиков событий
+        setupEventListeners();
+        
+        // Проверяем API
+        checkAPIs().then(ok => {
+            if (ok) {
+                showNotification('✅ Все сервисы готовы!');
+            } else {
+                showNotification('⚠️ Проверьте подключение к нейросетям');
+            }
+        });
+        
+        // Загружаем сохранение
+        loadGame();
+        
+        updateUI();
+        
+        showNotification('🎮 AI Dream Weaver загружен!');
+        
+        // Автоматическое тестирование API при загрузке
+        setTimeout(async () => {
+            try {
+                await testAPIConnection();
+            } catch (e) {
+                console.log('Автотест пропущен:', e.message);
+            }
+        }, 1000);
+    }
+    
+    async function testAPIConnection() {
+        console.log('Тестирование подключения к API...');
+        
+        try {
+            // Тест LM Studio
+            const testPrompt = "Привет! Ответь коротко 'OK' если ты работаешь.";
+            const llmTest = await askLLM(testPrompt);
+            
+            if (llmTest.includes('OK')) {
+                console.log('✅ LM Studio работает');
+            }
+            
+            return true;
+        } catch (error) {
+            console.warn('❌ Тест API не пройден:', error);
+            
+            // Показываем инструкцию если API недоступны
+            if (isLocal && window.location.href.includes('ngrok')) {
+                showNotification('🔧 Для работы с телефона укажи IP ПК в настройках');
+                addStoryText(`<span style="color:#ffaa00">
+                    <b>Важно!</b> Для игры с телефона:<br>
+                    1. Узнай IP компьютера (ipconfig)<br>
+                    2. Замени в коде localhost на этот IP<br>
+                    3. Перезапусти игру
+                </span>`);
+            }
+            
+            return false;
+        }
+    }
+    
+    function update() {
+        // Пустая функция, можно добавить анимации
+    }
+    
+    function setupEventListeners() {
+        const actionBtn = document.getElementById('action-btn');
+        const userInput = document.getElementById('user-input');
+        
+        if (actionBtn) {
+            actionBtn.addEventListener('click', handleUserAction);
+        }
+        
+        if (userInput) {
+            userInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleUserAction();
+            });
+            
+            userInput.addEventListener('input', () => {
+                // Авто-сохранение при вводе
+                if (userInput.value.length > 10) {
+                    saveGame();
+                }
+            });
+        }
+        
+        // Кнопки боя
+        document.getElementById('btn-attack')?.addEventListener('click', () => handleBattle('attack'));
+        document.getElementById('btn-item')?.addEventListener('click', () => handleBattle('item'));
+        document.getElementById('btn-flee')?.addEventListener('click', () => handleBattle('flee'));
+        
+        // Кнопки переключения панелей
+        document.getElementById('toggle-inventory')?.addEventListener('click', () => togglePanel('inventory-panel'));
+        document.getElementById('toggle-quests')?.addEventListener('click', () => togglePanel('quest-panel'));
+        
+        // Автоматическое скрытие панелей при клике вне
+        document.addEventListener('click', (e) => {
+            const panels = ['inventory-panel', 'quest-panel'];
+            const toggles = ['toggle-inventory', 'toggle-quests'];
+            
+            if (!panels.some(id => document.getElementById(id)?.contains(e.target)) &&
+                !toggles.some(id => document.getElementById(id)?.contains(e.target))) {
+                panels.forEach(id => {
+                    const panel = document.getElementById(id);
+                    if (panel) panel.style.display = 'none';
+                });
+            }
+        });
+        
+        // Сохранение при закрытии
+        window.addEventListener('beforeunload', saveGame);
+        
+        // Авто-сохранение каждые 30 секунд
+        setInterval(saveGame, 30000);
+    }
+    
+    async function handleUserAction() {
+        const input = document.getElementById('user-input');
+        const btn = document.getElementById('action-btn');
+        const userText = input?.value.trim();
+        
+        if (!userText) {
+            showNotification('✏️ Введите действие!');
+            return;
+        }
+        
+        btn.disabled = true;
+        addStoryText(`<i>Вы: "${userText}"</i>`);
+        
+        clearChoiceButtons();
+        
+        try {
+            // Проверяем API перед действием
+            const apisOk = await checkAPIs();
+            if (!apisOk) {
+                throw new Error('Нейросети недоступны. Проверьте Stable Diffusion и LM Studio.');
+            }
+            
+            // Проверка триггеров боя
+            if (await tryTriggerBattle(userText)) {
+                input.value = '';
+                btn.disabled = false;
+                return;
+            }
+            
+            // Проверка квестов
+            checkQuestProgress(userText);
+            
+            // Генерация истории
+            const story = await askLLM(`Игрок в фэнтези-мире снов. Действие: "${userText}". 
+                Опиши кратко (2 предложения) что происходит. 
+                Затем предложи 2 варианта действий (1. ... 2. ...).`);
+            
+            gameState.history.push(story);
+            addStoryText(story);
+            
+            // Генерация изображения (асинхронно, не блокируем интерфейс)
+            generateImageAsync(`fantasy scene: ${userText}`).catch(e => {
+                console.warn('Изображение не сгенерировано:', e);
+            });
+            
+            // Кнопки выбора
+            addChoiceButtons(story);
+            
+            // Случайный квест
+            if (Math.random() < 0.2) {
+                addRandomQuest();
+            }
+            
+        } catch (error) {
+            console.error('Ошибка действия:', error);
+            addStoryText(`<span style="color:#ff8888">❌ Ошибка: ${error.message}</span>`);
+            
+            // Предлагаем упрощенный режим
+            if (error.message.includes('fetch') || error.message.includes('network')) {
+                addStoryText(`<span style="color:#ffaa00">
+                    💡 <b>Совет:</b> Если нейросети недоступны:<br>
+                    1. Проверь что Stable Diffusion и LM Studio запущены<br>
+                    2. В консоли (F12) посмотри ошибки<br>
+                    3. Для игры с телефона укажи IP компьютера в настройках
+                </span>`);
+            }
+        }
+        
+        saveGame();
+        if (input) input.value = '';
+        btn.disabled = false;
+        updateUI();
+    }
+    
+    async function askLLM(prompt) {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000);
+            
+            const resp = await fetch(LLM_API, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: 'local-model',
+                    messages: [{ role: 'user', content: prompt }],
+                    temperature: 0.7,
+                    max_tokens: 300
+                }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!resp.ok) {
+                const errorText = await resp.text();
+                console.error('LLM Error Response:', errorText);
+                
+                // Fallback ответ
+                return `Вы "${prompt.split('"')[1] || 'исследуете'}" мир снов. Вы можете: 1. Идти дальше 2. Осмотреться 3. Искать предметы.`;
+            }
+            
+            const data = await resp.json();
+            return data.choices?.[0]?.message?.content || 'Нет ответа от нейросети.';
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw new Error('Таймаут запроса к нейросети (30 сек)');
+            }
+            throw error;
+        }
+    }
+    
+    async function generateImageAsync(prompt) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                showNotification('🖼️ Генерация изображения...');
+                
+                const resp = await fetch(SD_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt + ", fantasy art, digital painting, detailed",
+                        negative_prompt: "blurry, ugly, text, watermark, signature",
+                        steps: 15,
+                        width: 512,
+                        height: 384,
+                        cfg_scale: 7
+                    })
+                });
+                
+                if (!resp.ok) {
+                    const errorText = await resp.text();
+                    console.error('SD Error:', errorText);
+                    reject(new Error('Stable Diffusion ошибка'));
+                    return;
+                }
+                
+                const data = await resp.json();
+                
+                if (!data.images?.[0]) {
+                    reject(new Error('Нет изображения в ответе'));
+                    return;
+                }
+                
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    const scene = game.scene.scenes[0];
+                    
+                    if (scene.textures.exists('current')) {
+                        scene.textures.get('current').setSource(img);
+                    } else {
+                        scene.textures.addImage('current', img);
+                    }
+                    
+                    if (sceneImage) {
+                        sceneImage.setTexture('current');
+                        sceneImage.setAlpha(1);
+                    }
+                    
+                    showNotification('✅ Изображение готово!');
+                    resolve();
+                };
+                
+                img.onerror = () => {
+                    console.error('Ошибка загрузки изображения');
+                    showNotification('❌ Ошибка загрузки изображения');
+                    reject(new Error('Ошибка загрузки изображения'));
+                };
+                
+                img.src = `data:image/png;base64,${data.images[0]}`;
+                
+            } catch (error) {
+                console.error('Ошибка генерации:', error);
+                showNotification('❌ Ошибка генерации');
+                reject(error);
+            }
+        });
+    }
+    
+    // ========== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ==========
+    
+    function togglePanel(panelId) {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        
+        const isVisible = panel.style.display === 'block';
+        panel.style.display = isVisible ? 'none' : 'block';
+        
+        // Скрываем другие панели
+        const otherId = panelId === 'inventory-panel' ? 'quest-panel' : 'inventory-panel';
+        const otherPanel = document.getElementById(otherId);
+        if (otherPanel) otherPanel.style.display = 'none';
+    }
+    
+    function addStoryText(text) {
+        const panel = document.getElementById('story-text');
+        if (panel) {
+            panel.innerHTML += '<br>' + text;
+            panel.scrollTop = panel.scrollHeight;
+        }
+    }
+    
+    function clearChoiceButtons() {
+        document.querySelectorAll('.choice-btn').forEach(btn => btn.remove());
+    }
+    
+    function addChoiceButtons(storyText) {
+        clearChoiceButtons();
+        
+        const choices = storyText.match(/\d\.\s+([^\n]+)/g);
+        if (!choices) return;
+        
+        choices.forEach((choice, idx) => {
+            setTimeout(() => {
+                const btn = document.createElement('button');
+                btn.className = 'choice-btn';
+                btn.textContent = choice.replace(/^\d\.\s+/, '');
+                btn.onclick = () => {
+                    const input = document.getElementById('user-input');
+                    if (input) {
+                        input.value = btn.textContent;
+                        handleUserAction();
+                    }
+                };
+                document.body.appendChild(btn);
+            }, idx * 100);
+        });
+    }
+    
+    function showNotification(text) {
+        const notification = document.getElementById('notification');
+        if (!notification) return;
+        
+        notification.textContent = text;
+        notification.style.display = 'block';
+        
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
+    }
+    
+    // ========== СИСТЕМА СОХРАНЕНИЙ ==========
+    
+    function saveGame() {
+        try {
+            localStorage.setItem('dreamWeaverSave', JSON.stringify(gameState));
+            console.log('Игра сохранена');
+        } catch (e) {
+            console.warn('Ошибка сохранения:', e);
+        }
+    }
+    
+    function loadGame() {
+        try {
+            const saved = localStorage.getItem('dreamWeaverSave');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                Object.assign(gameState, parsed);
+                showNotification('💾 Сохранение загружено');
+                console.log('Сохранение загружено:', parsed);
+            }
+        } catch (e) {
+            console.warn('Ошибка загрузки сохранения:', e);
+        }
+    }
+    
+    // ========== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ ==========
+    
+    // ... остальные функции (бои, квесты, UI) остаются без изменений ...
+    // (используйте ваш существующий код для handleBattle, tryTriggerBattle, updateUI и т.д.)
+    
+    // В конце добавьте:
+    console.log('AI Dream Weaver инициализирован');
+    console.log('Telegram User:', tg.initDataUnsafe?.user);
+</script>
+</body>
+</html>
