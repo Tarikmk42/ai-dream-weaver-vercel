@@ -15,6 +15,11 @@ export default function handler(req, res) {
     timestamp: new Date().toISOString(),
     version: '1.0.0',
     environment: process.env.NODE_ENV || 'development',
-    message: 'AI Dream Weaver API работает!'
+    message: 'AI Dream Weaver API работает!',
+    endpoints: {
+      sd: '/api/sd-proxy',
+      llm: '/api/llm-proxy',
+      health: '/api/health'
+    }
   });
 }
